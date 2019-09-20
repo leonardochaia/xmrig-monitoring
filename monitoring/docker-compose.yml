@@ -1,0 +1,87 @@
+version: "3"
+
+networks:
+  monitor-net:
+    driver: bridge
+
+services:
+  nginx-proxy:
+    image: jwilder/nginx-proxy
+    container_name: nginx-proxy
+    networks:
+      - monitor-net
+    ports:
+      - 80:80
+      # - 443:443
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.10.0
+    container_name: prometheus
+    volumes:
+      - ./prometheus:/etc/prometheus/
+      - ./prometheus_data/:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=200h"
+      - "--web.enable-lifecycle"
+    environment:
+      # For nginx-proxy
+      VIRTUAL_HOST: prometheus.localhost
+      VIRTUAL_PORT: 9090
+    restart: unless-stopped
+    expose:
+      - 9090
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "monitoring"
+
+  grafana:
+    image: grafana/grafana:6.2.5
+    container_name: grafana
+    volumes:
+      - ./grafana_data/:/var/lib/grafana
+      - ./grafana/datasources:/etc/grafana/datasources
+      - ./grafana/dashboards:/etc/grafana/dashboards
+      - ./grafana/setup.sh:/setup.sh
+    entrypoint: /setup.sh
+    env_file: ./.env
+    environment:
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # GF_INSTALL_PLUGINS: grafana-piechart-panel,ryantxu-ajax-panel
+      # For nginx-proxy
+      VIRTUAL_HOST: grafana.localhost
+      VIRTUAL_PORT: 3000
+    restart: unless-stopped
+    expose:
+      - 3000
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "monitoring"
+
+  alertmanager:
+    image: prom/alertmanager:v0.17.0
+    container_name: alertmanager
+    volumes:
+      - ./alertmanager/:/etc/alertmanager/
+    command:
+      - "--config.file=/etc/alertmanager/config.yml"
+      - "--storage.path=/alertmanager"
+    restart: unless-stopped
+    environment:
+      # For nginx-proxy
+      VIRTUAL_HOST: alertmanager.localhost
+      VIRTUAL_PORT: 9093
+    expose:
+      - 9093
+    networks:
+      - monitor-net
+    labels:
+      org.label-schema.group: "monitoring"

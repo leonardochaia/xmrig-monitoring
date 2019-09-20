@@ -1,0 +1,40 @@
+version: "3"
+
+services:
+  xmrig:
+    image: lchaia/xmrig
+    container_name: xmrig
+    # Useful for debugging xmrig API, or if you wanna expose it for using other tools
+    # ports:
+    #   - 8080:8080
+    expose:
+      - 8080
+    command: --url randomx-benchmark.xmrig.com:7777 --algo rx/test --threads 1 --http-enabled --http-host 0.0.0.0 --http-port 8080 --api-worker-id miner-01
+
+  xmrig-exporter:
+    image: sbrudenell/xmrig_exporter
+    container_name: xmrig-exporter
+    ports:
+      - 9189:9189
+    command: --url http://xmrig:8080/1/summary --verbose
+    depends_on:
+      - xmrig
+
+  node-exporter:
+    image: prom/node-exporter:v0.18.1
+    container_name: node-exporter
+    user: root
+    privileged: true
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+    restart: unless-stopped
+    ports:
+      - 9100:9100
+    labels:
+      org.label-schema.group: "monitoring"
